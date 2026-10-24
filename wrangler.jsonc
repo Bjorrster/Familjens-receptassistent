@@ -8,7 +8,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "familjens-receptassistent-mcp",
+	"name": "familjens-receptassistent",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-07-02",
 	"compatibility_flags": [
@@ -17,7 +17,21 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "8c2e79ec9c664f65a4396b34c5868af7"
+		}
+	],
+	"secrets": {
+		"required": [
+			"GITHUB_CLIENT_ID",
+    			"GITHUB_CLIENT_SECRET",
+			"COOKIE_ENCRYPTION_KEY"
+		]
+	},
+
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

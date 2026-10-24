@@ -1,66 +1,82 @@
+
+import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/server";
-import { createMcpHandler } from "agents/mcp/server";
-import { z } from "zod";
+import {
+  createMcpHandler,
+  getMcpAuthContext,
+} from "agents/mcp/server";
+import { GitHubHandler } from "./github-handler";
+
+type UserProps = {
+  login: string;
+  name: string | null;
+  email: string | null;
+};
+
+const MCP_URL =
+  "https://familjens-receptassistent.bjorn-sunesson.workers.dev/mcp";
 
 function createServer() {
-	const server = new McpServer({
-		name: "Authless Calculator",
-		version: "1.0.0",
-	});
+  const server = new McpServer({
+    name: "Familjens Receptassistent",
+    version: "1.1.0",
+  });
 
-	server.registerTool(
-		"add",
-		{ inputSchema: z.object({ a: z.number(), b: z.number() }) },
-		async ({ a, b }) => ({
-			content: [{ type: "text", text: String(a + b) }],
-		}),
-	);
+  const props = getMcpAuthContext()?.props as
+    | UserProps
+    | undefined;
 
-	server.registerTool(
-		"calculate",
-		{
-			inputSchema: z.object({
-				operation: z.enum(["add", "subtract", "multiply", "divide"]),
-				a: z.number(),
-				b: z.number(),
-			}),
-		},
-		async ({ operation, a, b }) => {
-			let result: number;
-			switch (operation) {
-				case "add":
-					result = a + b;
-					break;
-				case "subtract":
-					result = a - b;
-					break;
-				case "multiply":
-					result = a * b;
-					break;
-				case "divide":
-					if (b === 0)
-						return {
-							content: [
-								{
-									type: "text",
-									text: "Error: Cannot divide by zero",
-								},
-							],
-						};
-					result = a / b;
-					break;
-			}
-			return { content: [{ type: "text", text: String(result) }] };
-		},
-	);
+  // All recipe tools require the authorized GitHub user.
+  if (props?.login?.toLowerCase() === "bjorrster") {
+    server.registerTool(
+      "recipeConnectionStatus",
+      {
+        description:
+          "Verify authenticated access to the recipe assistant.",
+      },
+      async () => ({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              status: "ok",
+              authenticated: true,
+              googleConnected: false,
+              message:
+                "GitHub OAuth works. Google Sheets is not connected yet.",
+            }),
+          },
+        ],
+      }),
+    );
+  }
 
-	return server;
+  return server;
 }
 
-const handler = createMcpHandler(createServer);
+const mcpHandler = createMcpHandler(createServer);
 
-export default {
-	fetch(request: Request, env: Env, ctx: ExecutionContext) {
-		return handler(request, env, ctx);
-	},
+const apiHandler = {
+  fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+  ) {
+    return mcpHandler(request, env, ctx);
+  },
 } satisfies ExportedHandler<Env>;
+
+export default new OAuthProvider({
+  apiHandler,
+  apiRoute: "/mcp",
+  resourceMetadata: {
+    resource: MCP_URL,
+    authorization_servers: [
+      "https://familjens-receptassistent.bjorn-sunesson.workers.dev",
+    ],
+  },
+  authorizeEndpoint: "/authorize",
+  tokenEndpoint: "/token",
+  clientRegistrationEndpoint: "/register",
+  defaultHandler: GitHubHandler as any,
+});
